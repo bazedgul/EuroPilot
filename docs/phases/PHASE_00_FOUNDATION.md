@@ -21,8 +21,8 @@ No implementation feature is approved. `DOC-000` is the documentation foundation
 
 ## Completed work and evidence
 
-Documentation files were prepared locally after inspecting the only existing file. Git state, branch, commit, and remote operations are blocked because this workspace has no `.git` directory. No application checks were run.
+The documentation foundation was reviewed on the dedicated branch. The mixed source-of-truth content was reorganized into a product-focused document while agent workflow remains in `AGENTS.md`. No application checks were run because application code does not exist and is out of scope.
 
 ## Exit criteria and blockers
 
-Owner approves source-of-truth separation, domain states/correlation, architecture/toolchain, security/tenancy/retention, API direction, and Phase 1 scope. Until then status remains In Progress.
+Owner approval remains required for domain states/correlation, architecture/toolchain, security/tenancy/retention, API direction, and Phase 1 scope. Until then status remains In Progress.

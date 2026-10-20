@@ -2,7 +2,7 @@
 
 ## Status
 
-This file contains repository workflow and agent rules. Product scope and terminology are defined in [`docs/PROJECT_SOURCE_OF_TRUTH.md`](docs/PROJECT_SOURCE_OF_TRUTH.md), which currently contains legacy mixed content and requires owner-approved separation.
+This file contains repository workflow and agent rules. Product scope and terminology are defined in [`docs/PROJECT_SOURCE_OF_TRUTH.md`](docs/PROJECT_SOURCE_OF_TRUTH.md).
 
 ## Required workflow
 
@@ -20,6 +20,27 @@ This file contains repository workflow and agent rules. Product scope and termin
 - A feature registry is only an index; every implemented feature needs its own specification.
 - Do not mark documentation-only work, requirements, or features implemented or verified without evidence.
 - Material scope, domain, security, architecture, data, API, or phase decisions require owner approval.
+
+## Security and testing
+
+- Never commit secrets, credentials, tokens, private keys, real payment credentials, or unnecessary sensitive payloads.
+- Validate untrusted input at server boundaries, enforce authorization server-side, avoid sensitive logging, and treat imported content as untrusted.
+- New implementation behavior requires appropriate unit, integration, API, frontend, security, regression, and end-to-end tests as applicable.
+- Do not delete, weaken, skip, or hide failing tests to obtain a passing result. Report unrun checks as `NOT RUN`.
+
+## Scope and AI safety
+
+- Do not add application features, dependencies, infrastructure, provider integrations, or external AI services without approved scope and documentation.
+- AI is advisory and must not invent evidence, override deterministic rules, declare uncertain payments successful or failed, or initiate, approve, cancel, reverse, or refund payments.
+- The initial MVP uses synthetic data and simulated provider events and must not move money or execute real payments. See the source of truth for the authoritative product definition.
+
+## Branch and review workflow
+
+- Read this file, the source of truth, the relevant phase and feature documents, ADRs, and related specifications before implementation.
+- Inspect status, branch, remotes, and recent history before editing; preserve all existing user work.
+- Work on a dedicated branch from the latest `main`. Never commit or push directly to `main`, force-push, rewrite shared history, or merge without owner approval.
+- Review the complete tracked and untracked diff for scope, secrets, accidental deletions, and documentation consistency before commit or PR.
+- Use exact command output when reporting tests, validation, commits, pushes, PRs, or merges. Never claim an operation succeeded without evidence.
 
 ## Product safety boundaries
 
