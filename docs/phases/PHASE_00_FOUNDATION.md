@@ -1,6 +1,6 @@
 # Phase 00 — Documentation Foundation
 
-Status: In Progress; owner approval required. No application feature implementation is in scope.
+Status: In Progress; owner approval required. The documentation foundation is complete enough to guide the current local demo implementation; Phase 0 is not a production-readiness approval.
 
 ## Objective and scope
 
@@ -21,7 +21,7 @@ No implementation feature is approved. `DOC-000` is the documentation foundation
 
 ## Completed work and evidence
 
-The documentation foundation was reviewed on the dedicated branch. The mixed source-of-truth content was reorganized into a product-focused document while agent workflow remains in `AGENTS.md`. No application checks were run because application code does not exist and is out of scope.
+The documentation foundation was reviewed on the dedicated branch. The mixed source-of-truth content was reorganized into a product-focused document while agent workflow remains in `AGENTS.md`. Subsequent local demo work added the deterministic backend, SQLite persistence, read-only API, and React dashboard; their checks are reported in implementation handoffs, not treated as Phase 0 approval.
 
 ## Exit criteria and blockers
 

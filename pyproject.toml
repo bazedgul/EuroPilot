@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "europilot"
+version = "0.1.0"
+description = "Deterministic payment incident investigation domain"
+requires-python = ">=3.12"
+dependencies = [
+    "Django>=5.0,<6.0",
+    "djangorestframework>=3.15,<4.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0,<9.0",
+    "pytest-django>=4.9,<5.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+testpaths = ["tests"]
+DJANGO_SETTINGS_MODULE = "europilot.settings"
+
+[tool.setuptools]
+package-dir = {"" = "backend"}
+
+[tool.setuptools.packages.find]
+where = ["backend"]
