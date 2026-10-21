@@ -30,7 +30,7 @@ class Command(BaseCommand):
             attempt_id="attempt-2", defaults={"payment": payment, "request_id": "request-2", "requested_at": datetime(2026, 1, 2, tzinfo=timezone.utc), "outcome": "unknown", "retry_of": attempt_one}
         )
         event, _ = ProviderEventRecord.objects.get_or_create(
-            provider="synthetic", event_id="event-1", defaults={"payment": payment, "event_type": "unknown", "occurred_at": datetime(2026, 1, 3, tzinfo=timezone.utc), "payload": ""}
+            provider="synthetic", event_id="event-1", defaults={"payment": payment, "event_type": "unknown", "occurred_at": datetime(2026, 1, 3, tzinfo=timezone.utc), "received_at": datetime(2026, 1, 4, tzinfo=timezone.utc), "payload": ""}
         )
         DeliveryRecord.objects.get_or_create(delivery_id="delivery-1", defaults={"provider_event": event, "received_at": datetime(2026, 1, 4, tzinfo=timezone.utc)})
         DeliveryRecord.objects.get_or_create(delivery_id="delivery-2", defaults={"provider_event": event, "received_at": datetime(2026, 1, 5, tzinfo=timezone.utc)})

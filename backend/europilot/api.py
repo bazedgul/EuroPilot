@@ -16,12 +16,12 @@ def _to_domain(record: InvestigationRecord) -> Investigation:
     for item in record.payment.attempts.order_by("attempt_id"):
         investigation.add_attempt(Attempt(item.attempt_id, payment.payment_id, item.request_id, item.requested_at, Outcome(item.outcome), item.retry_of.attempt_id if item.retry_of_id else None))
     for item in record.payment.provider_events.order_by("provider", "event_id"):
-        investigation.add_event(ProviderEvent(item.provider, item.event_id, payment.payment_id, EventType(item.event_type), item.occurred_at, item.payload))
+        investigation.add_event(ProviderEvent(item.provider, item.event_id, payment.payment_id, EventType(item.event_type), item.occurred_at, item.received_at, item.payload))
     for item in record.payment.provider_events.prefetch_related("deliveries").order_by("provider", "event_id"):
         for delivery in item.deliveries.order_by("delivery_id"):
             investigation.add_delivery(Delivery(delivery.delivery_id, item.provider, item.event_id, delivery.received_at))
     for item in record.payment.evidence.order_by("evidence_id"):
-        investigation.evidence.append(Evidence(item.evidence_id, payment.payment_id, item.source, item.reference, item.observed_at, item.received_at, EventType(item.event_type), item.provider, item.authoritative))
+        investigation.add_evidence(Evidence(item.evidence_id, payment.payment_id, item.source, item.reference, item.observed_at, item.received_at, EventType(item.event_type), item.provider, item.authoritative))
     return investigation
 
 
@@ -31,7 +31,7 @@ def _evidence(item: Evidence) -> dict:
 
 def _serialize(investigation: Investigation, investigation_id: str) -> dict:
     finding = evaluate_outcome(investigation.payment.payment_id, investigation.evidence)
-    return {"id": investigation_id, "payment": {"id": investigation.payment.payment_id, "invoice_id": investigation.payment.invoice_id}, "outcome": finding.outcome.value, "finding": {"outcome": finding.outcome.value, "missing_evidence": list(finding.missing_evidence)}, "missing_evidence": list(finding.missing_evidence), "attempts": [{"id": a.attempt_id, "request_id": a.request_id, "outcome": a.outcome.value, "retry_of": a.retry_of} for a in investigation.attempts], "deliveries": [{"id": d.delivery_id, "provider": d.provider, "event_id": d.event_id, "received_time": d.received_at.isoformat()} for d in investigation.deliveries], "evidence": [_evidence(item) for item in investigation.evidence], "supporting_evidence": [_evidence(item) for item in finding.evidence]}
+    return {"id": investigation_id, "payment": {"id": investigation.payment.payment_id, "invoice_id": investigation.payment.invoice_id}, "outcome": finding.outcome.value, "finding": {"outcome": finding.outcome.value, "missing_evidence": list(finding.missing_evidence), "rule_version": finding.rule_version, "conflict_evidence": [_evidence(item) for item in finding.conflict_evidence]}, "missing_evidence": list(finding.missing_evidence), "attempts": [{"id": a.attempt_id, "request_id": a.request_id, "requested_time": a.requested_at.isoformat(), "outcome": a.outcome.value, "retry_of": a.retry_of} for a in investigation.attempts], "events": [{"provider": e.provider, "id": e.event_id, "event_type": e.event_type.value, "event_time": e.occurred_at.isoformat(), "received_time": e.received_at.isoformat()} for e in investigation.events], "deliveries": [{"id": d.delivery_id, "provider": d.provider, "event_id": d.event_id, "received_time": d.received_at.isoformat()} for d in investigation.deliveries], "evidence": [_evidence(item) for item in investigation.evidence], "supporting_evidence": [_evidence(item) for item in finding.evidence]}
 
 
 @api_view(["GET"])

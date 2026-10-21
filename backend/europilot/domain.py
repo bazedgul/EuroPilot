@@ -65,6 +65,7 @@ class ProviderEvent:
     payment_id: str
     event_type: EventType
     occurred_at: datetime
+    received_at: datetime
     payload: str = ""
 
     def __post_init__(self) -> None:
@@ -109,6 +110,8 @@ class Finding:
     outcome: Outcome
     evidence: tuple[Evidence, ...]
     missing_evidence: tuple[str, ...] = ()
+    rule_version: str = "phase1-v1"
+    conflict_evidence: tuple[Evidence, ...] = ()
 
 
 @dataclass
@@ -144,6 +147,13 @@ class Investigation:
             raise ValueError("duplicate delivery")
         self.deliveries.append(delivery)
 
+    def add_evidence(self, evidence: Evidence) -> None:
+        if evidence.payment_id != self.payment.payment_id:
+            raise ValueError("evidence belongs to another payment")
+        if any(item.evidence_id == evidence.evidence_id for item in self.evidence):
+            raise ValueError("duplicate evidence_id")
+        self.evidence.append(evidence)
+
 
 def evaluate_outcome(
     payment_id: str,
@@ -159,7 +169,7 @@ def evaluate_outcome(
     )
     types = {e.event_type for e in relevant}
     if EventType.SUCCESS in types and EventType.FAILURE in types:
-        return Finding(payment_id, Outcome.CONFLICT, relevant)
+        return Finding(payment_id, Outcome.CONFLICT, relevant, ("authoritative evidence contains incompatible success and failure outcomes",), conflict_evidence=relevant)
     if types == {EventType.SUCCESS}:
         return Finding(payment_id, Outcome.CONFIRMED_SUCCESS, relevant)
     if types == {EventType.FAILURE}:
