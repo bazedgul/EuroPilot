@@ -31,11 +31,14 @@ def test_investigation_detail_contains_unknown_finding_and_provenance(client: Cl
     body = response.json()
     assert response.status_code == 200
     assert body["outcome"] == "unknown"
-    assert body["finding"] == {"outcome": "unknown", "missing_evidence": ["authoritative success or failure evidence is missing"]}
+    assert body["finding"]["outcome"] == "unknown"
+    assert body["finding"]["missing_evidence"] == ["authoritative success or failure evidence is missing"]
+    assert body["finding"]["rule_version"] == "phase1-v1"
     assert body["attempts"][1]["retry_of"] == "attempt-1"
     assert body["evidence"][0]["authoritative"] is False
     assert "event_time" in body["evidence"][0]
     assert "received_time" in body["evidence"][0]
+    assert body["events"][0]["received_time"] == "2026-01-04T00:00:00+00:00"
     assert body["supporting_evidence"] == []
 
 

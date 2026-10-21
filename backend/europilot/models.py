@@ -45,6 +45,7 @@ class ProviderEventRecord(models.Model):
     payment = models.ForeignKey(PaymentRecord, on_delete=models.PROTECT, related_name="provider_events")
     event_type = models.CharField(max_length=32)
     occurred_at = models.DateTimeField()
+    received_at = models.DateTimeField()
     payload = models.TextField(blank=True)
 
     class Meta:

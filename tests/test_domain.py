@@ -35,7 +35,7 @@ def test_timeout_retry_and_duplicate_delivery_preserve_identity(investigation: I
     retry = Attempt("att-2", "pay-1", "req-2", datetime(2026, 1, 2, tzinfo=UTC), retry_of="att-1")
     investigation.add_attempt(first)
     investigation.add_attempt(retry)
-    event = ProviderEvent("synthetic", "evt-1", "pay-1", EventType.UNKNOWN, datetime(2026, 1, 3, tzinfo=UTC))
+    event = ProviderEvent("synthetic", "evt-1", "pay-1", EventType.UNKNOWN, datetime(2026, 1, 3, tzinfo=UTC), datetime(2026, 1, 4, tzinfo=UTC))
     investigation.add_event(event)
     investigation.add_delivery(Delivery("delivery-1", "synthetic", "evt-1", datetime(2026, 1, 4, tzinfo=UTC)))
     investigation.add_delivery(Delivery("delivery-2", "synthetic", "evt-1", datetime(2026, 1, 5, tzinfo=UTC)))
@@ -81,6 +81,22 @@ def test_evidence_is_scoped_to_payment_and_authority() -> None:
     other_payment = evidence("other-success", EventType.SUCCESS, 1, 2, payment_id="pay-2")
     non_authoritative = Evidence("untrusted", "pay-1", "synthetic", "untrusted", datetime.now(UTC), datetime.now(UTC), EventType.SUCCESS, "synthetic")
     assert evaluate_outcome("pay-1", [other_payment, non_authoritative]).outcome is Outcome.UNKNOWN
+
+
+def test_investigation_rejects_cross_payment_and_duplicate_evidence(investigation: Investigation) -> None:
+    item = evidence("evidence-1", EventType.SUCCESS, 1, 2)
+    investigation.add_evidence(item)
+    with pytest.raises(ValueError, match="another payment"):
+        investigation.add_evidence(evidence("other", EventType.SUCCESS, 1, 2, payment_id="pay-2"))
+    with pytest.raises(ValueError, match="duplicate evidence_id"):
+        investigation.add_evidence(item)
+
+
+def test_conflict_explains_why_authoritative_evidence_is_insufficient() -> None:
+    finding = evaluate_outcome("pay-1", [evidence("success", EventType.SUCCESS, 1, 2), evidence("failure", EventType.FAILURE, 3, 4)])
+    assert finding.conflict_evidence == finding.evidence
+    assert finding.missing_evidence
+    assert finding.rule_version == "phase1-v1"
 
 
 def test_authoritative_evidence_requires_provider() -> None:

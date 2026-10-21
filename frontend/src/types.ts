@@ -12,7 +12,8 @@ export type Evidence = {
   authoritative: boolean;
 };
 
-export type Attempt = { id: string; request_id: string; outcome: Outcome; retry_of: string | null };
+export type Attempt = { id: string; request_id: string; requested_time: string; outcome: Outcome; retry_of: string | null };
+export type ProviderEvent = { provider: string; id: string; event_type: string; event_time: string; received_time: string };
 export type Delivery = { id: string; provider: string; event_id: string; received_time: string };
 
 export type Investigation = {
@@ -22,6 +23,7 @@ export type Investigation = {
   finding: { outcome: Outcome; missing_evidence: string[] };
   missing_evidence: string[];
   attempts: Attempt[];
+  events: ProviderEvent[];
   deliveries: Delivery[];
   evidence: Evidence[];
   supporting_evidence: Evidence[];

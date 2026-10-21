@@ -35,13 +35,15 @@ describe("investigation detail readability", () => {
       outcome: "unknown",
       finding: { outcome: "unknown", missing_evidence: ["authoritative evidence is missing"] },
       missing_evidence: ["authoritative evidence is missing"],
-      attempts: [{ id: "attempt-1", request_id: "request-1", outcome: "unknown", retry_of: null }, { id: "attempt-2", request_id: "request-2", outcome: "unknown", retry_of: "attempt-1" }],
+      attempts: [{ id: "attempt-1", request_id: "request-1", requested_time: "2026-01-01T00:00:00Z", outcome: "unknown", retry_of: null }, { id: "attempt-2", request_id: "request-2", requested_time: "2026-01-02T00:00:00Z", outcome: "unknown", retry_of: "attempt-1" }],
+      events: [{ provider: "synthetic", id: "event-1", event_type: "unknown", event_time: "2026-01-03T00:00:00Z", received_time: "2026-01-04T00:00:00Z" }],
       deliveries: [{ id: "delivery-1", provider: "synthetic", event_id: "event-1", received_time: "2026-01-04T00:00:00Z" }],
       evidence: [{ id: "evidence-1", payment_id: "payment-1", source: "synthetic", reference: "event-1", event_time: "2026-01-03T00:00:00Z", received_time: "2026-01-04T00:00:00Z", event_type: "unknown", provider: "synthetic", authoritative: false }],
       supporting_evidence: [],
     };
     render(<InvestigationDetail item={item} onBack={() => undefined} />);
     expect(screen.getByText("Retry of attempt-1")).toBeInTheDocument();
+    expect(screen.getAllByText("Requested time")).toHaveLength(2);
     expect(screen.getAllByText("Request ID").length).toBe(2);
     expect(screen.getAllByText("Relationship").length).toBe(2);
     expect(screen.getByText("Event reference")).toBeInTheDocument();
