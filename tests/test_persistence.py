@@ -30,6 +30,16 @@ def test_database_constraints_reject_duplicate_provider_event_and_delivery() -> 
             DeliveryRecord.objects.create(delivery_id="delivery-1", provider_event=event, received_at=event.occurred_at)
 
 
+def test_provider_event_receipt_time_can_be_unknown_without_changing_provider_time() -> None:
+    event = ProviderEventRecord.objects.get(provider="synthetic", event_id="event-1")
+    event.received_at = None
+    event.save()
+    event.refresh_from_db()
+
+    assert event.occurred_at.isoformat() == "2026-01-03T00:00:00+00:00"
+    assert event.received_at is None
+
+
 def test_retry_and_supporting_evidence_cannot_cross_payment_boundaries() -> None:
     invoice = InvoiceRecord.objects.create(invoice_id="invoice-2", amount="20.00")
     other_payment = PaymentRecord.objects.create(payment_id="payment-2", invoice=invoice)

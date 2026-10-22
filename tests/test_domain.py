@@ -13,7 +13,11 @@ from europilot.domain import (
     Outcome,
     Payment,
     ProviderEvent,
+    DomainValidationError,
+    SYNTHETIC_ACTOR,
     evaluate_outcome,
+    validate_case_transition,
+    validate_note,
 )
 
 
@@ -43,6 +47,20 @@ def test_timeout_retry_and_duplicate_delivery_preserve_identity(investigation: I
     assert [a.attempt_id for a in investigation.attempts] == ["att-1", "att-2"]
     assert len(investigation.deliveries) == 2
     assert finding.outcome is Outcome.UNKNOWN
+
+
+def test_provider_event_can_preserve_unknown_receipt_time_and_delivery_times() -> None:
+    event = ProviderEvent("synthetic", "evt-unknown-receipt", "pay-1", EventType.UNKNOWN, datetime(2026, 1, 3, tzinfo=UTC), None)
+    investigation = Investigation(Payment("pay-1", "inv-1"))
+
+    investigation.add_event(event)
+    investigation.add_delivery(Delivery("delivery-early", "synthetic", "evt-unknown-receipt", datetime(2026, 1, 4, tzinfo=UTC)))
+    investigation.add_delivery(Delivery("delivery-late", "synthetic", "evt-unknown-receipt", datetime(2026, 1, 5, tzinfo=UTC)))
+
+    assert investigation.events[0].occurred_at == datetime(2026, 1, 3, tzinfo=UTC)
+    assert investigation.events[0].received_at is None
+    assert [delivery.received_at for delivery in investigation.deliveries] == [datetime(2026, 1, 4, tzinfo=UTC), datetime(2026, 1, 5, tzinfo=UTC)]
+    assert evaluate_outcome("pay-1", ()).outcome is Outcome.UNKNOWN
 
 
 def test_confirmed_success_and_failure() -> None:
@@ -81,6 +99,85 @@ def test_evidence_is_scoped_to_payment_and_authority() -> None:
     other_payment = evidence("other-success", EventType.SUCCESS, 1, 2, payment_id="pay-2")
     non_authoritative = Evidence("untrusted", "pay-1", "synthetic", "untrusted", datetime.now(UTC), datetime.now(UTC), EventType.SUCCESS, "synthetic")
     assert evaluate_outcome("pay-1", [other_payment, non_authoritative]).outcome is Outcome.UNKNOWN
+
+
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [("open", "under_review"), ("open", "deferred"), ("under_review", "resolved"), ("under_review", "deferred"), ("deferred", "open"), ("deferred", "under_review")],
+)
+def test_approved_case_transitions_are_validated(source: str, target: str) -> None:
+    command = validate_case_transition(source, target, " Evidence reviewed " if target in {"resolved", "deferred"} else None, " request-1 ")
+
+    assert command.target_state == target
+    assert command.reason == ("Evidence reviewed" if target in {"resolved", "deferred"} else None)
+    assert command.request_id == "request-1"
+
+
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [("open", "resolved"), ("under_review", "open"), ("deferred", "resolved"), ("resolved", "open"), ("resolved", "under_review"), ("resolved", "deferred")],
+)
+def test_forbidden_case_transitions_have_stable_error_code(source: str, target: str) -> None:
+    with pytest.raises(DomainValidationError) as error:
+        validate_case_transition(source, target, "reason", "request-1")
+
+    assert error.value.code == "invalid_transition"
+
+
+def test_case_transition_rejects_unsupported_states() -> None:
+    with pytest.raises(DomainValidationError) as error:
+        validate_case_transition("unknown", "open", None, "request-1")
+
+    assert error.value.code == "unsupported_state"
+
+
+@pytest.mark.parametrize("target", ["resolved", "deferred"])
+def test_terminal_case_transitions_require_bounded_reason(target: str) -> None:
+    with pytest.raises(DomainValidationError, match="reason") as missing:
+        validate_case_transition("under_review", target, "   ", "request-1")
+    assert missing.value.code == "reason_required"
+
+    accepted = validate_case_transition("under_review", target, "r" * 500, "request-1")
+    assert accepted.reason == "r" * 500
+    with pytest.raises(DomainValidationError) as too_long:
+        validate_case_transition("under_review", target, "r" * 501, "request-1")
+    assert too_long.value.code == "reason_too_long"
+
+
+def test_nonterminal_transition_reason_is_optional_and_normalized() -> None:
+    assert validate_case_transition("open", "under_review", "  ", "request-1").reason is None
+    assert validate_case_transition("open", "under_review", " reason ", "request-1").reason == "reason"
+
+
+@pytest.mark.parametrize("request_id", ["", "   ", "r" * 129])
+def test_request_id_boundaries_have_stable_errors(request_id: str) -> None:
+    with pytest.raises(DomainValidationError) as error:
+        validate_case_transition("open", "under_review", None, request_id)
+
+    assert error.value.code in {"request_id_required", "request_id_too_long"}
+
+
+def test_note_validation_normalizes_text_and_assigns_server_actor() -> None:
+    note = validate_note("  analyst note  ", " request-1 ")
+
+    assert note.text == "analyst note"
+    assert note.request_id == "request-1"
+    assert note.actor == SYNTHETIC_ACTOR
+
+
+@pytest.mark.parametrize("text", ["", "   ", "n" * 2001])
+def test_note_validation_rejects_blank_or_overlong_text(text: str) -> None:
+    with pytest.raises(DomainValidationError) as error:
+        validate_note(text, "request-1")
+
+    assert error.value.code in {"note_required", "note_too_long"}
+
+
+def test_note_exact_limit_and_caller_actor_override_are_handled() -> None:
+    assert validate_note("n" * 2000, "request-1").text == "n" * 2000
+    with pytest.raises(DomainValidationError) as error:
+        validate_note("note", "request-1", actor="client-supplied")
+    assert error.value.code == "actor_not_allowed"
 
 
 def test_investigation_rejects_cross_payment_and_duplicate_evidence(investigation: Investigation) -> None:
