@@ -9,5 +9,6 @@ Status: Proposed; index only.
 | F-002 | Synthetic provider events | Pending specification | 01 | Proposed | Not approved |
 | F-003 | Evidence timeline and reconciliation view | Pending specification | 03 | Proposed | Not approved |
 | F-004 | AI-assisted explanation | Pending specification | 04 | Proposed | Not approved |
+| F-005 | Deterministic reconciliation case workflow | [`../phases/PHASE_02_RECONCILIATION_CASE_WORKFLOW.md`](../phases/PHASE_02_RECONCILIATION_CASE_WORKFLOW.md) | 02 | Approved planning scope; not implemented | Owner approved |
 
 Future implementation features require individual Markdown specifications covering scope, rules, impacts, security, failure cases, acceptance criteria, tests, checklist, evidence, limitations, and changelog before implementation.

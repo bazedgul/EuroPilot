@@ -51,7 +51,7 @@ An approved timeout, missing event, delayed event, network error, or non-authori
 
 ### Event ordering and duplicates — Approved
 
-Every event representation should preserve original provider event time and local received time. Delivery occurrences should remain traceable to the underlying provider event, including repeated deliveries and replays. Late or out-of-order events may change a finding only when the approved deterministic rule says the new evidence changes the evidence set; the timeline must retain both original ordering facts and the resulting evaluation.
+Every event representation should preserve original provider event time and local received time when known. Historical provider-event receipt time may be unknown and must remain explicit as `null`; provider event time, delivery receipt time, evidence receipt time, and provider-event receipt time are distinct facts. Delivery occurrences should remain traceable to the underlying provider event, including repeated deliveries and replays. Late or out-of-order events may change a finding only when the approved deterministic rule says the new evidence changes the evidence set; the timeline must retain both original ordering facts and the resulting evaluation.
 
 Invalid, unknown, and conflicting evidence must not be silently discarded. Evaluation must use a deterministic ordering and rule version so the same evidence set and approved configuration produce the same result.
 
@@ -96,7 +96,7 @@ The current verification commands are documented in the root README and include 
 - `Invoice`: payable identifier and decimal-safe amount.
 - `Payment`: logical payment identifier and invoice relationship.
 - `Attempt`: attempt identifier, payment relationship, retry relation, request time, and observed request outcome.
-- `ProviderEvent`: provider/source identity, event identity, type, original event time, received time, and status/payload reference.
+- `ProviderEvent`: provider/source identity, event identity, type, original event time, known local received time or explicit unknown value, and status/payload reference.
 - `EventDelivery`: delivery identity, source scope, received time, and provider-event relationship.
 - `Evidence`: source, identity, provenance, event/receipt times, observed fact, and links to the records it supports or contradicts.
 - `Investigation`: related records, proposed outcome, supporting evidence, missing-evidence reasons, conflicts, and rule version.

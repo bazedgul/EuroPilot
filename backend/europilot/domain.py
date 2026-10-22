@@ -6,7 +6,39 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
+import re
 from typing import Iterable
+
+
+SYNTHETIC_ACTOR = "synthetic_local_operator"
+CASE_STATES = ("open", "under_review", "resolved", "deferred")
+CASE_TRANSITIONS = {
+    "open": frozenset({"under_review", "deferred"}),
+    "under_review": frozenset({"resolved", "deferred"}),
+    "deferred": frozenset({"open", "under_review"}),
+    "resolved": frozenset(),
+}
+
+
+class DomainValidationError(ValueError):
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        self.message = message
+        super().__init__(message)
+
+
+@dataclass(frozen=True)
+class TransitionCommand:
+    target_state: str
+    reason: str | None
+    request_id: str
+
+
+@dataclass(frozen=True)
+class NoteCommand:
+    text: str
+    request_id: str
+    actor: str = SYNTHETIC_ACTOR
 
 
 class Outcome(StrEnum):
@@ -20,6 +52,74 @@ class EventType(StrEnum):
     SUCCESS = "success"
     FAILURE = "failure"
     UNKNOWN = "unknown"
+
+
+def normalize_text(value: str, field_name: str, max_length: int, *, required: bool = True) -> str:
+    normalized = value.strip()
+    if required and not normalized:
+        raise ValueError(f"{field_name} is required")
+    if len(normalized) > max_length:
+        raise ValueError(f"{field_name} must be at most {max_length} characters")
+    return normalized
+
+
+def normalize_request_id(value: str) -> str:
+    return normalize_text(value, "request_id", 128)
+
+
+def validate_fingerprint(value: str) -> str:
+    if not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise ValueError("fingerprint must be a lowercase SHA-256 hex digest")
+    return value
+
+
+def _normalize_reason(reason: str | None, target_state: str) -> str | None:
+    if reason is None:
+        if target_state in {"resolved", "deferred"}:
+            raise DomainValidationError("reason_required", "a reason is required for this transition")
+        return None
+    normalized = normalize_text(reason, "reason", 500, required=target_state in {"resolved", "deferred"})
+    return normalized or None
+
+
+def validate_transition_input(target_state: str, reason: str | None, request_id: str) -> TransitionCommand:
+    if target_state not in CASE_STATES:
+        raise DomainValidationError("unsupported_state", "the target state must be a supported case state")
+    try:
+        normalized_request_id = normalize_request_id(request_id)
+    except ValueError as error:
+        code = "request_id_too_long" if len(request_id.strip()) > 128 else "request_id_required"
+        raise DomainValidationError(code, str(error)) from error
+    try:
+        normalized_reason = _normalize_reason(reason, target_state)
+    except ValueError as error:
+        code = "reason_too_long" if reason is not None and len(reason.strip()) > 500 else "reason_required"
+        raise DomainValidationError(code, str(error)) from error
+    return TransitionCommand(target_state, normalized_reason, normalized_request_id)
+
+
+def validate_case_transition(source_state: str, target_state: str, reason: str | None, request_id: str) -> TransitionCommand:
+    if source_state not in CASE_STATES or target_state not in CASE_STATES:
+        raise DomainValidationError("unsupported_state", "source and target states must be supported case states")
+    if target_state not in CASE_TRANSITIONS[source_state]:
+        raise DomainValidationError("invalid_transition", "the requested case transition is not allowed")
+    return validate_transition_input(target_state, reason, request_id)
+
+
+def validate_note(text: str, request_id: str, *, actor: str | None = None) -> NoteCommand:
+    if actor is not None:
+        raise DomainValidationError("actor_not_allowed", "the actor is assigned by the server")
+    try:
+        normalized_text = normalize_text(text, "note", 2000)
+    except ValueError as error:
+        code = "note_too_long" if len(text.strip()) > 2000 else "note_required"
+        raise DomainValidationError(code, str(error)) from error
+    try:
+        normalized_request_id = normalize_request_id(request_id)
+    except ValueError as error:
+        code = "request_id_too_long" if len(request_id.strip()) > 128 else "request_id_required"
+        raise DomainValidationError(code, str(error)) from error
+    return NoteCommand(normalized_text, normalized_request_id)
 
 
 @dataclass(frozen=True)
@@ -65,7 +165,7 @@ class ProviderEvent:
     payment_id: str
     event_type: EventType
     occurred_at: datetime
-    received_at: datetime
+    received_at: datetime | None
     payload: str = ""
 
     def __post_init__(self) -> None:

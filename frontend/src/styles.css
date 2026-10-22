@@ -25,4 +25,14 @@ main { max-width: 1160px; margin: 0 auto; padding: 1.25rem clamp(1rem, 4vw, 4rem
 .evidence dl { gap: 1rem 2rem; margin-top: 1rem; padding-top: .85rem; border-top: 1px solid #24405f; }
 .evidence dd { margin-top: .25rem; overflow-wrap: anywhere; }
 .delivery { align-items: start; padding: 1rem; }.delivery > div { flex: 1; }.delivery time { color: #d6e3f1; }
+.case-workflow-form { display: grid; gap: .55rem; margin-top: .9rem; }
+.case-workflow-form label { color: #b9cbe0; font-size: .85rem; font-weight: 700; }
+.case-workflow-form select, .case-workflow-form textarea { width: 100%; box-sizing: border-box; padding: .7rem .8rem; border: 1px solid #375574; border-radius: 8px; color: #e7edf8; background: #0b1c31; font: inherit; }
+.case-workflow-form select { min-height: 2.6rem; }
+.case-workflow-form textarea { min-height: 7rem; resize: vertical; line-height: 1.45; }
+.case-workflow-form select:focus-visible, .case-workflow-form textarea:focus-visible, .case-workflow-form button:focus-visible { outline: 3px solid #80c8ef; outline-offset: 2px; }
+.case-workflow-form select:disabled, .case-workflow-form textarea:disabled, .case-workflow-form button:disabled { cursor: not-allowed; opacity: .55; }
+.case-workflow-form button { justify-self: start; margin-top: .35rem; padding: .65rem .9rem; border: 1px solid #4d789b; border-radius: 8px; color: #e7edf8; background: #163658; cursor: pointer; }
+.case-workflow-form button:not(:disabled):hover { background: #1d486c; }
+.character-counter { justify-self: end; color: #829ab7; font-size: .75rem; }
 @media (max-width: 640px) { .attempt, .evidence-context { grid-template-columns: 1fr; }.attempt-meta { display: grid; gap: .75rem; }.meta-pair { min-width: 0; }.delivery { display: grid; gap: .8rem; } }
