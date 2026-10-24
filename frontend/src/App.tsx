@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ApiError, createCaseNote, getCase, getHealth, listCases, transitionCase } from "./api";
+import { ApiError, createCaseNote, getCase, getHealth, getInvestigation, listCases, transitionCase } from "./api";
 import type { CaseDetail, CasePage, CaseState, Health, Investigation, InvestigationPage, Outcome } from "./types";
 
 const outcomeLabels: Record<Outcome, string> = {
@@ -52,9 +52,9 @@ function InvestigationList({ page, onSelect, onPage, retry }: { page: Investigat
   </>;
 }
 
-export function InvestigationDetail({ item, onBack }: { item: Investigation; onBack: () => void }) {
-  return <div className="detail-view"><button className="back-button" onClick={onBack}>&lt;- Back to investigations</button>
-    <div className="detail-heading"><div><span className="card-kicker">Investigation {item.id}</span><h1>{item.payment.id}</h1><p>Invoice / payable: {item.payment.invoice_id}</p></div><OutcomeBadge outcome={item.outcome} /></div>
+export function InvestigationDetail({ item, onBack, embedded = false }: { item: Investigation; onBack: () => void; embedded?: boolean }) {
+  return <div className={embedded ? "investigation-embedded" : "detail-view"}>{!embedded && <button className="back-button" onClick={onBack}>&lt;- Back to investigations</button>}
+    {!embedded && <div className="detail-heading"><div><span className="card-kicker">Investigation {item.id}</span><h1>{item.payment.id}</h1><p>Invoice / payable: {item.payment.invoice_id}</p></div><OutcomeBadge outcome={item.outcome} /></div>}
     <section className="panel finding-panel"><div><span className="section-label">Deterministic finding</span><h2><OutcomeBadge outcome={item.finding.outcome} /></h2></div><div><span className="section-label">Missing evidence</span>{item.finding.missing_evidence.length ? <ul>{item.finding.missing_evidence.map((reason) => <li key={reason}>{reason}</li>)}</ul> : <p>No missing evidence recorded.</p>}</div></section>
     <section className="panel"><span className="section-label">Payment attempts</span><div className="attempt-list">{item.attempts.length ? item.attempts.map((attempt) => <div className="attempt" key={attempt.id}><div className="attempt-main"><span className="field-label">Attempt ID</span><strong className="field-value">{attempt.id}</strong></div><div className="attempt-main"><span className="field-label">Outcome</span><span className="attempt-outcome field-value">{attempt.outcome}</span></div><div className="attempt-meta"><div className="meta-pair"><span className="field-label">Request ID</span><span className="field-value">{attempt.request_id}</span></div><div className="meta-pair"><span className="field-label">Requested time</span><time className="field-value">{formatTime(attempt.requested_time)}</time></div><div className="meta-pair retry-note"><span className="field-label">Relationship</span><span className="field-value">{attempt.retry_of ? `Retry of ${attempt.retry_of}` : "Initial attempt"}</span></div></div></div>) : <p>No attempt data returned.</p>}</div></section>
     <section className="panel"><span className="section-label">Evidence timeline</span><div className="evidence-list">{item.evidence.length ? item.evidence.map((evidence) => <article className="evidence" key={evidence.id}><div className="evidence-title"><div><span className="field-label">Event type</span><strong>{evidence.event_type}</strong></div><span className={evidence.authoritative ? "authority authority-yes" : "authority authority-no"}>{evidence.authoritative ? "Authoritative" : "Non-authoritative"}</span></div><div className="evidence-context"><div><span className="field-label">Source</span><span>{evidence.source}</span></div><div><span className="field-label">Provider</span><span>{evidence.provider ?? "Not specified"}</span></div><div><span className="field-label">Event reference</span><span>{evidence.reference}</span></div></div><dl><div><dt>Provider event time</dt><dd>{formatTime(evidence.event_time)}</dd></div><div><dt>Received time</dt><dd>{formatTime(evidence.received_time)}</dd></div></dl></article>) : <p>No evidence returned.</p>}</div></section>
@@ -100,8 +100,68 @@ export function CaseDetailView({ item, onBack, onRefresh }: { item: CaseDetail; 
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [retry, setRetry] = useState<(() => Promise<void>) | null>(null);
+  const [investigation, setInvestigation] = useState<Investigation | null>(null);
+  const [investigationLoading, setInvestigationLoading] = useState(true);
+  const [investigationError, setInvestigationError] = useState<string | null>(null);
+  const [investigationRetryable, setInvestigationRetryable] = useState(false);
+  const investigationRequest = useRef(0);
   const reasonRequired = target === "resolved" || target === "deferred";
   const transitions = allowedTransitions[item.state];
+
+  useEffect(() => {
+    const request = ++investigationRequest.current;
+    setInvestigation(null);
+    setInvestigationError(null);
+    setInvestigationRetryable(false);
+    setInvestigationLoading(true);
+    if (typeof item.investigation_id !== "string" || !item.investigation_id.trim()) {
+      setInvestigationError("The case does not identify a valid investigation.");
+      setInvestigationLoading(false);
+      return;
+    }
+    void getInvestigation(item.investigation_id).then((result) => {
+      if (request !== investigationRequest.current) return;
+      if (result.id !== item.investigation_id || result.payment.id !== item.payment_id) {
+        setInvestigationError("The case investigation relationship could not be validated.");
+        return;
+      }
+      setInvestigation(result);
+    }).catch((err) => {
+      if (request === investigationRequest.current) {
+        setInvestigationError(caseError(err));
+        setInvestigationRetryable(err instanceof ApiError && (err.status === 0 || err.status === 503));
+      }
+    }).finally(() => {
+      if (request === investigationRequest.current) setInvestigationLoading(false);
+    });
+  }, [item.id, item.investigation_id, item.payment_id]);
+
+  const retryInvestigation = () => {
+    setInvestigationError(null);
+    setInvestigationRetryable(false);
+    setInvestigationLoading(true);
+    const request = ++investigationRequest.current;
+    if (typeof item.investigation_id !== "string" || !item.investigation_id.trim()) {
+      setInvestigationError("The case does not identify a valid investigation.");
+      setInvestigationLoading(false);
+      return;
+    }
+    void getInvestigation(item.investigation_id).then((result) => {
+      if (request !== investigationRequest.current) return;
+      if (result.id !== item.investigation_id || result.payment.id !== item.payment_id) {
+        setInvestigationError("The case investigation relationship could not be validated.");
+        return;
+      }
+      setInvestigation(result);
+    }).catch((err) => {
+      if (request === investigationRequest.current) {
+        setInvestigationError(caseError(err));
+        setInvestigationRetryable(err instanceof ApiError && (err.status === 0 || err.status === 503));
+      }
+    }).finally(() => {
+      if (request === investigationRequest.current) setInvestigationLoading(false);
+    });
+  };
 
   const runMutation = async (action: () => Promise<void>, retryable: boolean) => {
     setPending(true); setError(null); setRetry(null);
@@ -126,6 +186,7 @@ export function CaseDetailView({ item, onBack, onRefresh }: { item: CaseDetail; 
     <div className="detail-heading"><div><span className="card-kicker">Case {item.id}</span><h1>{item.payment_id}</h1><p>Investigation: {item.investigation_id}</p></div><span className={`outcome outcome-${item.state}`}>{stateLabels[item.state]}</span></div>
     {error && <div className="state error-state" role="alert"><strong>Unable to complete this case action.</strong><span>{error}</span>{retry && <button onClick={retryMutation} disabled={pending}>Retry same request</button>}</div>}
     <section className="panel finding-panel"><div><span className="section-label">Payment outcome</span><h2><OutcomeBadge outcome={item.payment_outcome} /></h2></div><div><span className="section-label">Resolution reason</span><p>{item.resolution_reason ?? "No resolution reason recorded."}</p></div></section>
+    <section className="panel" aria-live="polite"><span className="section-label">Investigation evidence</span>{investigationLoading && <div className="state"><span className="spinner" aria-hidden="true" /> Loading investigation evidence...</div>}{!investigationLoading && investigationError && <div className="state error-state" role="alert"><strong>Unable to load investigation evidence.</strong><span>{investigationError}</span>{investigationRetryable && <button onClick={retryInvestigation}>Retry</button>}</div>}{!investigationLoading && !investigationError && investigation && <InvestigationDetail item={investigation} onBack={() => undefined} embedded />}</section>
     <section className="panel"><span className="section-label">Update case state</span>{transitions.length ? <form className="case-workflow-form" onSubmit={submitTransition}><label htmlFor="case-target">New state</label><select id="case-target" value={target} onChange={(event) => setTarget(event.target.value as CaseState)} disabled={pending}><option value="">Select a state</option>{transitions.map((state) => <option key={state} value={state}>{stateLabels[state]}</option>)}</select><label htmlFor="case-reason">Reason {reasonRequired ? "(required)" : "(optional)"}</label><textarea id="case-reason" value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} aria-describedby="case-reason-count" disabled={pending} /><span className="character-counter" id="case-reason-count">{reason.length}/500</span><button type="submit" disabled={pending || !target || (reasonRequired && !reason.trim())}>{pending ? "Saving..." : "Save state"}</button></form> : <p>This case is resolved and has no further state transitions in this phase.</p>}</section>
     <section className="panel"><span className="section-label">Add analyst note</span><form className="case-workflow-form" onSubmit={submitNote}><label htmlFor="case-note">Note</label><textarea id="case-note" value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} aria-describedby="case-note-count" disabled={pending} /><span className="character-counter" id="case-note-count">{note.length}/2000</span><button type="submit" disabled={pending || !note.trim()}>{pending ? "Saving..." : "Add note"}</button></form></section>
     <section className="panel"><span className="section-label">Notes</span>{item.notes.length ? item.notes.map((entry) => <article className="evidence" key={entry.id}><strong>{entry.actor}</strong><time>{formatTime(entry.created_at)}</time><p>{entry.text}</p></article>) : <p>No notes recorded.</p>}</section>

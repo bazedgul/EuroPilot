@@ -2,15 +2,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseDetailView, CaseList, HealthBanner, InvestigationDetail, OutcomeBadge } from "./App";
 import type { CaseDetail, CasePage, Investigation } from "./types";
-import { ApiError, transitionCase } from "./api";
+import { ApiError, getInvestigation, transitionCase } from "./api";
 
 vi.mock("./api", async () => {
   const actual = await vi.importActual<typeof import("./api")>("./api");
-  return { ...actual, transitionCase: vi.fn() };
+  return { ...actual, getInvestigation: vi.fn(), transitionCase: vi.fn() };
 });
 
 afterEach(cleanup);
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(getInvestigation).mockResolvedValue(investigationDetail);
+});
 
 describe("outcome presentation", () => {
   it.each([
@@ -66,6 +69,19 @@ const caseDetail: CaseDetail = {
   id: "case-1", investigation_id: "investigation-1", payment_id: "payment-1", state: "open", payment_outcome: "unknown", updated_at: "2026-01-05T00:00:00Z", resolution_reason: null,
   notes: [{ id: "note-1", text: "Plain <text>", actor: "synthetic_local_operator", created_at: "2026-01-05T00:00:00Z" }],
   audit_events: [{ id: "audit-1", action: "note_created", actor: "synthetic_local_operator", created_at: "2026-01-05T00:00:00Z", previous_state: null, new_state: null, reason: null, note_id: "note-1", request_id: "request-1" }],
+};
+
+const investigationDetail: Investigation = {
+  id: "investigation-1",
+  payment: { id: "payment-1", invoice_id: "invoice-1" },
+  outcome: "unknown",
+  finding: { outcome: "unknown", missing_evidence: ["authoritative evidence is missing"] },
+  missing_evidence: ["authoritative evidence is missing"],
+  attempts: [],
+  events: [],
+  deliveries: [],
+  evidence: [{ id: "evidence-1", payment_id: "payment-1", source: "synthetic", reference: "event-1", event_time: "2026-01-03T00:00:00Z", received_time: "2026-01-04T00:00:00Z", event_type: "unknown", provider: "synthetic", authoritative: false }],
+  supporting_evidence: [],
 };
 
 describe("case workflow presentation", () => {
@@ -137,5 +153,118 @@ describe("case workflow presentation", () => {
     await waitFor(() => expect(transition).toHaveBeenCalledTimes(2));
     expect(transition.mock.calls[1]).toEqual(firstCall);
     expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("composes investigation evidence while preserving case notes and audit history", async () => {
+    render(<CaseDetailView item={caseDetail} onBack={() => undefined} onRefresh={async () => undefined} />);
+
+    expect(screen.getByText("Payment outcome")).toBeInTheDocument();
+    expect(screen.getByText("note_created")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Evidence timeline")).toBeInTheDocument());
+    expect(screen.getByText("event-1")).toBeInTheDocument();
+    expect(screen.getAllByText("Unknown outcome").length).toBeGreaterThan(0);
+  });
+
+  it("keeps the case shell visible while investigation data loads", () => {
+    vi.mocked(getInvestigation).mockImplementationOnce(() => new Promise(() => undefined));
+    render(<CaseDetailView item={caseDetail} onBack={() => undefined} onRefresh={async () => undefined} />);
+
+    expect(screen.getByText("payment-1")).toBeInTheDocument();
+    expect(screen.getByText("Loading investigation evidence...")).toBeInTheDocument();
+    expect(screen.getByText("Payment outcome")).toBeInTheDocument();
+  });
+
+  it("shows a safe investigation error and retries without hiding the case shell", async () => {
+    const investigation = vi.mocked(getInvestigation);
+    investigation.mockRejectedValueOnce(new ApiError(503, "The investigation service is temporarily unavailable."));
+    investigation.mockResolvedValueOnce(investigationDetail);
+    render(<CaseDetailView item={caseDetail} onBack={() => undefined} onRefresh={async () => undefined} />);
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("operation may still be processing"));
+    expect(screen.getByText("payment-1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.getByText("Evidence timeline")).toBeInTheDocument());
+  });
+
+  it("offers retry for a network failure", async () => {
+    const investigation = vi.mocked(getInvestigation);
+    investigation.mockRejectedValueOnce(new ApiError(0, "The API could not be reached."));
+    investigation.mockResolvedValueOnce(investigationDetail);
+    render(<CaseDetailView item={caseDetail} onBack={() => undefined} onRefresh={async () => undefined} />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument());
+    expect(screen.getByText("payment-1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.getByText("Evidence timeline")).toBeInTheDocument());
+  });
+
+  it("rejects a missing investigation identifier without rendering evidence", async () => {
+    render(<CaseDetailView item={{ ...caseDetail, investigation_id: "" }} onBack={() => undefined} onRefresh={async () => undefined} />);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("does not identify a valid investigation"));
+    expect(screen.getByText("payment-1")).toBeInTheDocument();
+    expect(screen.queryByText("event-1")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["null", null],
+    ["number", 42],
+  ])("rejects a malformed runtime investigation identifier (%s) safely", async (_label, value) => {
+    const malformedCase = { ...caseDetail, investigation_id: value as unknown as string };
+    render(<CaseDetailView item={malformedCase} onBack={() => undefined} onRefresh={async () => undefined} />);
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("does not identify a valid investigation"));
+    expect(screen.getByText("payment-1")).toBeInTheDocument();
+    expect(screen.queryByText("event-1")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  });
+
+  it("rejects an investigation identifier mismatch without rendering evidence", async () => {
+    vi.mocked(getInvestigation).mockResolvedValueOnce({ ...investigationDetail, id: "other-investigation" });
+    render(<CaseDetailView item={caseDetail} onBack={() => undefined} onRefresh={async () => undefined} />);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("could not be validated"));
+    expect(screen.getByText("payment-1")).toBeInTheDocument();
+    expect(screen.queryByText("event-1")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  });
+
+  it("rejects a payment identifier mismatch without rendering evidence", async () => {
+    vi.mocked(getInvestigation).mockResolvedValueOnce({ ...investigationDetail, payment: { ...investigationDetail.payment, id: "other-payment" } });
+    render(<CaseDetailView item={caseDetail} onBack={() => undefined} onRefresh={async () => undefined} />);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("could not be validated"));
+    expect(screen.getByText("payment-1")).toBeInTheDocument();
+    expect(screen.queryByText("event-1")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer retry for a non-retryable investigation error", async () => {
+    vi.mocked(getInvestigation).mockRejectedValueOnce(new ApiError(404, "The requested investigation was not found."));
+    render(<CaseDetailView item={caseDetail} onBack={() => undefined} onRefresh={async () => undefined} />);
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("requested investigation was not found"));
+    expect(screen.getByText("payment-1")).toBeInTheDocument();
+    expect(screen.queryByText("event-1")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  });
+
+  it("renders conflict outcomes through the existing outcome presentation", async () => {
+    vi.mocked(getInvestigation).mockResolvedValueOnce({ ...investigationDetail, outcome: "conflict", finding: { ...investigationDetail.finding, outcome: "conflict" } });
+    render(<CaseDetailView item={caseDetail} onBack={() => undefined} onRefresh={async () => undefined} />);
+    await waitFor(() => expect(screen.getAllByText("Conflicting evidence").length).toBeGreaterThan(0));
+  });
+
+  it("does not apply a stale investigation response after the case changes", async () => {
+    let resolveFirst: ((value: Investigation) => void) | undefined;
+    const investigation = vi.mocked(getInvestigation);
+    investigation.mockImplementationOnce(() => new Promise<Investigation>((resolve) => { resolveFirst = resolve; }));
+    const { rerender } = render(<CaseDetailView item={caseDetail} onBack={() => undefined} onRefresh={async () => undefined} />);
+    await waitFor(() => expect(investigation).toHaveBeenCalledTimes(1));
+    const nextCase = { ...caseDetail, id: "case-2", investigation_id: "investigation-2", payment_id: "payment-2" };
+    investigation.mockResolvedValueOnce({ ...investigationDetail, id: "investigation-2", payment: { id: "payment-2", invoice_id: "invoice-2" } });
+    rerender(<CaseDetailView item={nextCase} onBack={() => undefined} onRefresh={async () => undefined} />);
+    resolveFirst?.(investigationDetail);
+    await waitFor(() => expect(screen.getByText("Evidence timeline")).toBeInTheDocument());
+    expect(screen.getByText("payment-2")).toBeInTheDocument();
+    expect(screen.queryByText("payment-1")).not.toBeInTheDocument();
   });
 });

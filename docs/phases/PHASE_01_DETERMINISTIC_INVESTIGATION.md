@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed implementation task; owner-approved decisions recorded below. Phase 0 remains `In Progress` until its own completion requirements are satisfied. The deterministic domain, read-only API, frontend dashboard, and SQLite local/demo persistence are implemented in the working tree; this document remains the scope and safety reference, not a production-readiness claim.
+Phase 1 contains bounded planning decisions and documents a local/demo implementation of the deterministic domain, read-only API, frontend, and synthetic persistence. This does not establish formal feature acceptance or production readiness. Deferred visual-browser, end-to-end, performance, security, and concurrency verification must remain explicitly unresolved until supported by appropriate evidence.
 
 ## Objective
 

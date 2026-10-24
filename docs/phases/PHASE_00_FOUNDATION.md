@@ -8,7 +8,7 @@ Establish accurate, linked product, domain, architecture, security, UI/UX, testi
 
 ## Feature specifications
 
-No implementation feature is approved. `DOC-000` is the documentation foundation tracked by this phase; the registry is not a substitute for future feature specifications.
+No implementation feature is approved by Phase 0 alone. Feature-specific scope approval, specification, and implementation authorization remain required; F-003 has a separately recorded owner authorization for its bounded local/demo scope. `DOC-000` is the documentation foundation tracked by this phase; the registry is not a substitute for future feature specifications.
 
 ## Acceptance criteria
 

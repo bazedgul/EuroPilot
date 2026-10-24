@@ -1,6 +1,6 @@
 # Data Model
 
-Status: Proposed conceptual model. Phase 2 case workflow is approved planning scope; its schema and migrations are not implemented.
+Status: Proposed conceptual model. Phase 2 case-workflow records and migrations are documented as implemented locally. Formal Phase 2 acceptance remains pending, and production database concurrency guarantees and production readiness remain unverified.
 
 ## Existing Phase 1 records and persistence
 
@@ -10,7 +10,7 @@ The conceptual model does not define a production database. The current reposito
 
 ## Proposed Phase 2 records and constraints
 
-Phase 2 proposes a reconciliation case belonging to exactly one investigation, separate note records belonging to one case, append-only application audit events, and persisted idempotency records. These records and constraints do not exist yet.
+Phase 2 proposes a reconciliation case belonging to exactly one investigation, separate note records belonging to one case, append-only application audit events, and persisted idempotency records. These records and constraints are documented as implemented in the local Phase 2 workflow. Formal acceptance, supported-production concurrency verification, and production readiness remain unresolved.
 
 Proposed case fields include lifecycle state, investigation reference, timestamps, and any approved resolution reason. Notes include case reference, note ID, normalized text up to 2,000 characters, timestamp, and server-controlled actor `synthetic_local_operator`. Transition reasons are normalized text up to 500 characters. Request IDs are normalized, non-empty, and at most 128 characters. Audit events include action, case/entity references, actor, timestamp, and action-specific metadata. Idempotency records include case, action, request ID, normalized request fingerprint, original status, and original response body.
 

@@ -1,6 +1,6 @@
 # UI/UX Specification
 
-Status: Proposed; no frontend implemented.
+Status: Proposed UX specification. A local/demo frontend implementation exists for the Phase 1 investigation workflow and Phase 2 case workflow. This document does not establish formal UX approval, formal acceptance, or production readiness.
 
 The proposed interface is a trustworthy operations workspace with investigation list/detail views, evidence timelines, source/type/timestamp visibility, filters, pagination, and explicit missing/unknown/conflict states. Unknown must not resemble confirmed success or failure.
 
