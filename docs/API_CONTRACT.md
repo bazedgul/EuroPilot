@@ -1,6 +1,6 @@
 # API Contract
 
-Status: Phase 1 read-only endpoints and the Phase 2 case list/detail and mutation endpoints are implemented locally; frontend workflow remains future work.
+Status: Phase 1 read-only endpoints and the Phase 2 case list/detail and mutation endpoints are implemented locally. The frontend workflow is implemented locally and has reported automated and isolated-browser evidence; formal owner acceptance remains pending.
 
 ## Existing Phase 1 API
 
@@ -12,7 +12,7 @@ Verified in `backend/europilot/urls.py`:
 
 These endpoints remain read-only, preserve Phase 1 outcome semantics, and must not seed or mutate persisted state.
 
-## Proposed Phase 2 resources
+## Phase 2 resources (implemented locally; acceptance status remains evidence-based)
 
 The case list/detail and mutation endpoints below are implemented locally. They use the local synthetic actor `synthetic_local_operator`; this is not authentication, authorization, or production tenancy.
 
@@ -144,7 +144,7 @@ Every state-changing operation requires a request ID. After trimming, it must be
 
 The semantic fingerprint is computed after validation and trimming. Transition fingerprints contain `target_state` and `reason`; note fingerprints contain `text`. The synthetic actor is server-controlled and excluded from the client payload. JSON key ordering and insignificant surrounding whitespace cannot change a fingerprint.
 
-The idempotency record persists the normalized fingerprint, original HTTP status, and original response body. A repeated key with the same fingerprint replays that status/body without another case change, note, or audit event. A repeated key with a different fingerprint returns `409 Conflict` and `idempotency_key_reused`. Concurrent same-key requests are serialized or resolved by the database uniqueness constraint and transaction handling so only one operation takes effect.
+The idempotency record persists the normalized fingerprint, original HTTP status, and original response body. A repeated key with the same fingerprint replays that status/body without another case change, note, or audit event. A repeated key with a different fingerprint returns `409 Conflict` and `idempotency_key_reused`. Database uniqueness and transaction handling are the intended guards for concurrent same-key requests, but concurrent behavior has not been demonstrated on the supported production database backend; SQLite test results do not establish that guarantee.
 
 ## Errors
 
