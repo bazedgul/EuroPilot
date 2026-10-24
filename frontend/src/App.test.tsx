@@ -1,9 +1,16 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseDetailView, CaseList, HealthBanner, InvestigationDetail, OutcomeBadge } from "./App";
 import type { CaseDetail, CasePage, Investigation } from "./types";
+import { ApiError, transitionCase } from "./api";
+
+vi.mock("./api", async () => {
+  const actual = await vi.importActual<typeof import("./api")>("./api");
+  return { ...actual, transitionCase: vi.fn() };
+});
 
 afterEach(cleanup);
+beforeEach(() => vi.clearAllMocks());
 
 describe("outcome presentation", () => {
   it.each([
@@ -95,5 +102,40 @@ describe("case workflow presentation", () => {
     render(<CaseDetailView item={{ ...caseDetail, state: "resolved", resolution_reason: "Done" }} onBack={() => undefined} onRefresh={async () => undefined} />);
     expect(screen.getByText(/no further state transitions/i)).toBeInTheDocument();
     expect(screen.queryByLabelText("New state")).not.toBeInTheDocument();
+  });
+
+  it("shows a safe idempotency conflict without retrying automatically", async () => {
+    const transition = vi.mocked(transitionCase);
+    transition.mockRejectedValueOnce(new ApiError(409, "The request ID was already used with a different payload.", "idempotency_key_reused"));
+    render(<CaseDetailView item={caseDetail} onBack={() => undefined} onRefresh={async () => undefined} />);
+
+    fireEvent.change(screen.getByLabelText("New state"), { target: { value: "under_review" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save state" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("The request ID was already used with a different payload."));
+    expect(screen.queryByText("Retry same request")).not.toBeInTheDocument();
+    expect(screen.queryByText("Case state updated successfully.")).not.toBeInTheDocument();
+    expect(transition).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers a same-request retry for a retryable 503", async () => {
+    const transition = vi.mocked(transitionCase);
+    transition
+      .mockRejectedValueOnce(new ApiError(503, "The operation could not be safely completed; retry the request.", "concurrency_retryable"))
+      .mockResolvedValueOnce({ case: { id: "case-1", state: "under_review", resolution_reason: null, payment_outcome: "unknown" }, audit_event: { id: "audit-2", action: "case_transitioned", actor: "synthetic_local_operator", created_at: "2026-01-05T00:01:00Z", previous_state: "open", new_state: "under_review", reason: null, note_id: null, request_id: "ignored" } });
+    const onRefresh = vi.fn().mockResolvedValue(undefined);
+    render(<CaseDetailView item={caseDetail} onBack={() => undefined} onRefresh={onRefresh} />);
+
+    fireEvent.change(screen.getByLabelText("New state"), { target: { value: "under_review" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save state" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Retry same request" })).toBeInTheDocument());
+    expect(screen.getByText(/operation may still be processing/i)).toBeInTheDocument();
+    expect(screen.queryByText("Case state updated successfully.")).not.toBeInTheDocument();
+
+    const firstCall = transition.mock.calls[0];
+    fireEvent.click(screen.getByRole("button", { name: "Retry same request" }));
+    await waitFor(() => expect(transition).toHaveBeenCalledTimes(2));
+    expect(transition.mock.calls[1]).toEqual(firstCall);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 });
